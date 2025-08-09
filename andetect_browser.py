@@ -19,15 +19,64 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QVBoxLayout, QHBoxLayout,
     QWidget, QPushButton, QLineEdit, QMenuBar, QAction, QMessageBox,
     QProgressBar, QStatusBar, QToolBar, QLabel, QCheckBox, QDialog,
-    QFormLayout, QSpinBox, QComboBox
+    QFormLayout, QSpinBox, QComboBox, QTextEdit, QGroupBox, QProgressDialog
 )
 from PyQt5.QtCore import QUrl, QTimer, pyqtSignal, QThread, Qt
-from PyQt5.QtGui import QIcon, QFont
-from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile, QWebEnginePage
-from PyQt5.QtWebEngineCore import QWebEngineSettings
+from PyQt5.QtGui import QIcon, QFont, QPixmap
+try:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile, QWebEnginePage, QWebEngineSettings
+except ImportError:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile, QWebEnginePage
+    # Mock QWebEngineSettings if not available
+    class QWebEngineSettings:
+        JavascriptEnabled = "JavascriptEnabled"
+        JavascriptCanOpenWindows = "JavascriptCanOpenWindows"
+        JavascriptCanAccessClipboard = "JavascriptCanAccessClipboard"
+        PluginsEnabled = "PluginsEnabled"
+        AutoLoadImages = "AutoLoadImages"
+        LocalStorageEnabled = "LocalStorageEnabled"
+        LocalContentCanAccessRemoteUrls = "LocalContentCanAccessRemoteUrls"
+        WebGLEnabled = "WebGLEnabled"
 
 import requests
 from fake_useragent import UserAgent
+
+# Імпорт наших модулів з fallback
+try:
+    from privacy_protection import PrivacyManager, FingerprintProtection, PrivateWebView
+except ImportError as e:
+    print(f"Warning: Could not import privacy_protection: {e}")
+    PrivacyManager = None
+    FingerprintProtection = None
+    PrivateWebView = QWebEngineView
+
+try:
+    from tor_integration import AnonymityManager, TorController
+except ImportError as e:
+    print(f"Warning: Could not import tor_integration: {e}")
+    AnonymityManager = None
+    TorController = None
+
+try:
+    from data_cleaner import DataCleaner, CleanupThread
+except ImportError as e:
+    print(f"Warning: Could not import data_cleaner: {e}")
+    DataCleaner = None
+    CleanupThread = None
+
+try:
+    from security_scanner import SecurityScanner, ThreatLevel
+except ImportError as e:
+    print(f"Warning: Could not import security_scanner: {e}")
+    SecurityScanner = None
+    
+    # Mock ThreatLevel
+    class ThreatLevel:
+        SAFE = "safe"
+        LOW = "low"
+        MEDIUM = "medium"
+        HIGH = "high"
+        CRITICAL = "critical"
 
 
 class AnonymitySettings:
@@ -290,15 +339,128 @@ class SettingsDialog(QDialog):
         self.accept()
 
 
+class SecurityStatusDialog(QDialog):
+    """Діалог статусу безпеки"""
+    
+    def __init__(self, security_info: Dict[str, Any], parent=None):
+        super().__init__(parent)
+        self.security_info = security_info
+        self.init_ui()
+    
+    def init_ui(self):
+        self.setWindowTitle("Статус Безпеки")
+        self.setFixedSize(500, 400)
+        
+        layout = QVBoxLayout()
+        
+        # Загальний статус
+        status_group = QGroupBox("Загальний статус")
+        status_layout = QVBoxLayout()
+        
+        threat_level = self.security_info.get('overall_threat_level', ThreatLevel.SAFE)
+        status_label = QLabel(f"Рівень загрози: {threat_level.value.upper()}")
+        
+        if threat_level == ThreatLevel.SAFE:
+            status_label.setStyleSheet("color: green; font-weight: bold;")
+        elif threat_level == ThreatLevel.LOW:
+            status_label.setStyleSheet("color: orange; font-weight: bold;")
+        elif threat_level in [ThreatLevel.MEDIUM, ThreatLevel.HIGH]:
+            status_label.setStyleSheet("color: red; font-weight: bold;")
+        else:
+            status_label.setStyleSheet("color: darkred; font-weight: bold;")
+        
+        status_layout.addWidget(status_label)
+        
+        risk_score = self.security_info.get('overall_risk_score', 0)
+        score_label = QLabel(f"Оцінка ризику: {risk_score:.1f}/100")
+        status_layout.addWidget(score_label)
+        
+        status_group.setLayout(status_layout)
+        layout.addWidget(status_group)
+        
+        # Деталі сканування
+        details_group = QGroupBox("Деталі сканування")
+        details_layout = QVBoxLayout()
+        
+        details_text = QTextEdit()
+        details_text.setReadOnly(True)
+        
+        details_content = self.format_security_details()
+        details_text.setPlainText(details_content)
+        
+        details_layout.addWidget(details_text)
+        details_group.setLayout(details_layout)
+        layout.addWidget(details_group)
+        
+        # Рекомендації
+        recommendations = self.security_info.get('recommendations', [])
+        if recommendations:
+            rec_group = QGroupBox("Рекомендації")
+            rec_layout = QVBoxLayout()
+            
+            for rec in recommendations[:5]:  # Максимум 5 рекомендацій
+                rec_label = QLabel(f"• {rec}")
+                rec_label.setWordWrap(True)
+                rec_layout.addWidget(rec_label)
+            
+            rec_group.setLayout(rec_layout)
+            layout.addWidget(rec_group)
+        
+        # Кнопка закриття
+        close_btn = QPushButton("Закрити")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn)
+        
+        self.setLayout(layout)
+    
+    def format_security_details(self) -> str:
+        """Форматування деталей безпеки"""
+        details = []
+        
+        url_analysis = self.security_info.get('url_analysis', {})
+        if url_analysis:
+            details.append(f"URL Аналіз:")
+            details.append(f"  Оцінка ризику: {url_analysis.get('risk_score', 0)}")
+            
+            warnings = url_analysis.get('warnings', [])
+            if warnings:
+                details.append("  Попередження:")
+                for warning in warnings[:3]:
+                    details.append(f"    - {warning}")
+        
+        cert_analysis = self.security_info.get('certificate_analysis', {})
+        if cert_analysis:
+            details.append(f"\nSSL Сертифікат:")
+            details.append(f"  Дійсний: {'Так' if cert_analysis.get('valid') else 'Ні'}")
+            
+            issues = cert_analysis.get('issues', [])
+            if issues:
+                details.append("  Проблеми:")
+                for issue in issues[:3]:
+                    details.append(f"    - {issue}")
+        
+        malware_analysis = self.security_info.get('malware_analysis', {})
+        if malware_analysis:
+            threats = malware_analysis.get('threats_found', [])
+            if threats:
+                details.append(f"\nВиявлені загрози:")
+                for threat in threats[:3]:
+                    details.append(f"  - {threat.get('description', 'Невідома загроза')}")
+        
+        return '\n'.join(details) if details else "Детальна інформація недоступна"
+
+
 class BrowserTab(QWidget):
     """Клас для окремої вкладки браузера"""
     
     title_changed = pyqtSignal(str)
     url_changed = pyqtSignal(str)
     
-    def __init__(self, anonymity_settings: AnonymitySettings, parent=None):
+    def __init__(self, anonymity_settings: AnonymitySettings, security_scanner: SecurityScanner, parent=None):
         super().__init__(parent)
         self.anonymity_settings = anonymity_settings
+        self.security_scanner = security_scanner
+        self.current_security_info = {}
         self.init_ui()
     
     def init_ui(self):
@@ -306,14 +468,62 @@ class BrowserTab(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         
         # Веб-переглядач
-        self.web_view = PrivateWebView(self.anonymity_settings)
+        if PrivateWebView and PrivateWebView != QWebEngineView:
+            self.web_view = PrivateWebView(self.anonymity_settings)
+        else:
+            self.web_view = QWebEngineView()
         layout.addWidget(self.web_view)
         
         # Підключення сигналів
         self.web_view.titleChanged.connect(self.title_changed)
-        self.web_view.urlChanged.connect(lambda url: self.url_changed.emit(url.toString()))
+        self.web_view.urlChanged.connect(self.on_url_changed)
+        
+        # Підключення до сканера безпеки (якщо доступний)
+        if self.security_scanner:
+            self.security_scanner.scan_completed.connect(self.on_security_scan_completed)
         
         self.setLayout(layout)
+    
+    def on_url_changed(self, url):
+        """Обробка зміни URL"""
+        url_str = url.toString() if hasattr(url, 'toString') else str(url)
+        self.url_changed.emit(url_str)
+        
+        # Запуск сканування безпеки (якщо доступний)
+        if url_str and url_str != "about:blank" and self.security_scanner:
+            self.security_scanner.scan_url(url_str)
+    
+    def on_security_scan_completed(self, security_info):
+        """Обробка завершення сканування безпеки"""
+        self.current_security_info = security_info
+        
+        # Перевірка на високий рівень загрози
+        threat_level = security_info.get('overall_threat_level', ThreatLevel.SAFE)
+        if threat_level in [ThreatLevel.HIGH, ThreatLevel.CRITICAL]:
+            self.show_security_warning(security_info)
+    
+    def show_security_warning(self, security_info):
+        """Показ попередження про загрозу"""
+        threat_level = security_info.get('overall_threat_level')
+        url = security_info.get('url', 'Unknown')
+        
+        if threat_level == ThreatLevel.CRITICAL:
+            title = "КРИТИЧНА ЗАГРОЗА!"
+            message = f"Сайт {url} може бути надзвичайно небезпечним!"
+        else:
+            title = "ВИСОКА ЗАГРОЗА!"
+            message = f"Сайт {url} може бути небезпечним!"
+        
+        reply = QMessageBox.critical(
+            self, title, 
+            f"{message}\n\nРекомендується заблокувати доступ.\n\nПродовжити завантаження?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.No:
+            self.web_view.stop()
+            self.web_view.load(QUrl("about:blank"))
     
     def load_url(self, url: str):
         """Завантаження URL"""
@@ -328,6 +538,10 @@ class BrowserTab(QWidget):
     def get_url(self) -> str:
         """Отримання поточного URL"""
         return self.web_view.url().toString()
+    
+    def get_security_info(self) -> Dict[str, Any]:
+        """Отримання інформації про безпеку"""
+        return self.current_security_info
 
 
 class AnDetectBrowser(QMainWindow):
@@ -336,9 +550,21 @@ class AnDetectBrowser(QMainWindow):
     def __init__(self):
         super().__init__()
         self.anonymity_settings = AnonymitySettings()
+        
+        # Ініціалізація компонентів з перевіркою доступності
+        self.privacy_manager = PrivacyManager() if PrivacyManager else None
+        self.anonymity_manager = AnonymityManager() if AnonymityManager else None
+        self.data_cleaner = DataCleaner() if DataCleaner else None
+        self.security_scanner = SecurityScanner() if SecurityScanner else None
+        
+        # Статистика
+        self.blocked_trackers_count = 0
+        self.current_ip = None
+        
         self.load_settings()
         self.init_ui()
         self.setup_security()
+        self.setup_connections()
     
     def init_ui(self):
         """Ініціалізація інтерфейсу"""
@@ -367,10 +593,16 @@ class AnDetectBrowser(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         
-        # Індикатор анонімності
+        # Індикатори статусу
         self.anonymity_label = QLabel("Анонімність: Активна")
         self.anonymity_label.setStyleSheet("color: green; font-weight: bold;")
         self.status_bar.addPermanentWidget(self.anonymity_label)
+        
+        self.ip_label = QLabel("IP: Невідомо")
+        self.status_bar.addPermanentWidget(self.ip_label)
+        
+        self.blocked_label = QLabel("Заблоковано: 0")
+        self.status_bar.addPermanentWidget(self.blocked_label)
         
         # Створення першої вкладки
         self.new_tab()
@@ -418,6 +650,18 @@ class AnDetectBrowser(QMainWindow):
         settings_btn.setFixedSize(30, 30)
         settings_btn.clicked.connect(self.show_settings)
         toolbar.addWidget(settings_btn)
+        
+        # Кнопка безпеки
+        security_btn = QPushButton("🛡")
+        security_btn.setFixedSize(30, 30)
+        security_btn.clicked.connect(self.show_security_status)
+        toolbar.addWidget(security_btn)
+        
+        # Кнопка нової ідентичності
+        identity_btn = QPushButton("🔄")
+        identity_btn.setFixedSize(30, 30)
+        identity_btn.clicked.connect(self.new_identity)
+        toolbar.addWidget(identity_btn)
     
     def create_menu(self):
         """Створення меню"""
@@ -453,10 +697,19 @@ class AnDetectBrowser(QMainWindow):
         clear_data_action = QAction('Очистити дані', self)
         clear_data_action.triggered.connect(self.clear_browser_data)
         tools_menu.addAction(clear_data_action)
+        
+        new_identity_action = QAction('Нова ідентичність', self)
+        new_identity_action.setShortcut('Ctrl+Shift+N')
+        new_identity_action.triggered.connect(self.new_identity)
+        tools_menu.addAction(new_identity_action)
+        
+        security_status_action = QAction('Статус безпеки', self)
+        security_status_action.triggered.connect(self.show_security_status)
+        tools_menu.addAction(security_status_action)
     
     def new_tab(self, url: str = ""):
         """Створення нової вкладки"""
-        tab = BrowserTab(self.anonymity_settings)
+        tab = BrowserTab(self.anonymity_settings, self.security_scanner)
         
         # Підключення сигналів
         tab.title_changed.connect(lambda title: self.update_tab_title(tab, title))
@@ -542,7 +795,10 @@ class AnDetectBrowser(QMainWindow):
         )
         
         if reply == QMessageBox.Yes:
-            self.perform_data_cleanup()
+            if self.data_cleaner:
+                self.data_cleaner.perform_full_cleanup()
+            else:
+                self.perform_data_cleanup()
             QMessageBox.information(self, 'Готово', 'Дані браузера очищено')
     
     def perform_data_cleanup(self):
@@ -573,6 +829,61 @@ class AnDetectBrowser(QMainWindow):
     def setup_security(self):
         """Налаштування безпеки"""
         self.update_anonymity_status()
+        
+        # Застосування налаштувань анонімності (якщо доступно)
+        if self.anonymity_manager:
+            if self.anonymity_settings.tor_enabled:
+                self.anonymity_manager.enable_tor()
+            
+            if self.anonymity_settings.proxy_enabled:
+                self.anonymity_manager.enable_proxy(
+                    self.anonymity_settings.proxy_host,
+                    self.anonymity_settings.proxy_port
+                )
+    
+    def setup_connections(self):
+        """Налаштування підключень сигналів"""
+        # Підключення до менеджера анонімності (якщо доступний)
+        if self.anonymity_manager:
+            self.anonymity_manager.status_changed.connect(self.on_anonymity_status_changed)
+            self.anonymity_manager.ip_changed.connect(self.on_ip_changed)
+        
+        # Підключення до менеджера приватності (якщо доступний)
+        if self.privacy_manager:
+            self.privacy_manager.trackers_blocked.connect(self.on_trackers_blocked)
+        
+        # Підключення до очистки даних (якщо доступна)
+        if self.data_cleaner:
+            self.data_cleaner.cleanup_status.connect(self.on_cleanup_status)
+        
+        # Підключення до сканера безпеки (якщо доступний)
+        if self.security_scanner:
+            self.security_scanner.threat_detected.connect(self.on_threat_detected)
+    
+    def on_anonymity_status_changed(self, status: str):
+        """Обробка зміни статусу анонімності"""
+        self.status_bar.showMessage(status, 3000)
+    
+    def on_ip_changed(self, new_ip: str):
+        """Обробка зміни IP"""
+        self.current_ip = new_ip
+        self.ip_label.setText(f"IP: {new_ip}")
+    
+    def on_trackers_blocked(self, count: int):
+        """Обробка блокування трекерів"""
+        self.blocked_trackers_count = count
+        self.blocked_label.setText(f"Заблоковано: {count}")
+    
+    def on_cleanup_status(self, status: str):
+        """Обробка статусу очищення"""
+        self.status_bar.showMessage(status, 2000)
+    
+    def on_threat_detected(self, url: str, threat_info: Dict[str, Any]):
+        """Обробка виявлення загрози"""
+        threat_level = threat_info.get('overall_threat_level')
+        self.status_bar.showMessage(f"Загроза виявлена: {url}", 5000)
+        
+        # Можна додати аудіо сигнал або інші форми сповіщення
     
     def update_anonymity_status(self):
         """Оновлення статусу анонімності"""
@@ -604,10 +915,65 @@ class AnDetectBrowser(QMainWindow):
         except Exception as e:
             print(f"Помилка збереження налаштувань: {e}")
     
+    def show_security_status(self):
+        """Показ статусу безпеки поточної вкладки"""
+        current_tab = self.tabs.currentWidget()
+        if current_tab and hasattr(current_tab, 'get_security_info'):
+            security_info = current_tab.get_security_info()
+            if security_info:
+                dialog = SecurityStatusDialog(security_info, self)
+                dialog.exec_()
+            else:
+                QMessageBox.information(
+                    self, 'Статус безпеки', 
+                    'Інформація про безпеку недоступна для поточної сторінки'
+                )
+    
+    def new_identity(self):
+        """Створення нової ідентичності"""
+        reply = QMessageBox.question(
+            self, 'Нова ідентичність', 
+            'Створити нову ідентичність? Це змінить ваш IP та очистить дані.',
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Очищення даних
+            if self.data_cleaner:
+                self.data_cleaner.perform_full_cleanup()
+            else:
+                self.perform_data_cleanup()
+            
+            # Створення нової ідентичності в Tor
+            if self.anonymity_settings.tor_enabled and self.anonymity_manager:
+                success = self.anonymity_manager.new_identity()
+                if success:
+                    QMessageBox.information(self, 'Готово', 'Нова ідентичність створена')
+                else:
+                    QMessageBox.warning(self, 'Помилка', 'Не вдалося створити нову ідентичність')
+            else:
+                QMessageBox.information(self, 'Готово', 'Дані очищено')
+    
     def closeEvent(self, event):
         """Обробка закриття програми"""
+        # Зупинка всіх сервісів
+        if hasattr(self, 'anonymity_manager') and self.anonymity_manager:
+            self.anonymity_manager.disable_tor()
+            self.anonymity_manager.disable_proxy()
+        
+        # Очищення даних при виході
         if self.anonymity_settings.clear_on_exit:
-            self.perform_data_cleanup()
+            progress = QProgressDialog("Очищення даних...", None, 0, 100, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.show()
+            
+            # Виконання швидкого очищення
+            if self.data_cleaner:
+                self.data_cleaner.perform_full_cleanup()
+            else:
+                self.perform_data_cleanup()
+            progress.setValue(100)
+            progress.close()
         
         self.save_settings()
         event.accept()

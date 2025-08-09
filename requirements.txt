@@ -1,7 +1,7 @@
-PyQt5==5.15.9
-PyQtWebEngine==5.15.6
-PySocks==1.7.1
-requests==2.31.0
-stem==1.8.2
-fake-useragent==1.4.0
-cryptography==41.0.7
+PyQt5>=5.15.0
+PyQtWebEngine>=5.15.0
+PySocks>=1.7.0
+requests>=2.25.0
+stem>=1.8.0
+fake-useragent>=1.1.0
+cryptography>=3.0.0

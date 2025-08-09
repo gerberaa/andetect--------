@@ -13,8 +13,24 @@ from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse
 
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
-from PyQt5.QtWebEngineCore import QWebEngineUrlRequestInterceptor
-from PyQt5.QtWebEngineWidgets import QWebEngineProfile
+try:
+    from PyQt5.QtWebEngineWidgets import QWebEngineProfile, QWebEngineView, QWebEnginePage, QWebEngineSettings
+    from PyQt5.QtWebEngineCore import QWebEngineUrlRequestInterceptor
+except ImportError:
+    # Fallback for different PyQt5 versions
+    from PyQt5.QtWebEngineWidgets import QWebEngineProfile, QWebEngineView, QWebEnginePage
+    from PyQt5.QtWebEngineCore import QWebEngineUrlRequestInterceptor
+    
+    # Mock QWebEngineSettings if not available
+    class QWebEngineSettings:
+        JavascriptEnabled = "JavascriptEnabled"
+        JavascriptCanOpenWindows = "JavascriptCanOpenWindows"
+        JavascriptCanAccessClipboard = "JavascriptCanAccessClipboard"
+        PluginsEnabled = "PluginsEnabled"
+        AutoLoadImages = "AutoLoadImages"
+        LocalStorageEnabled = "LocalStorageEnabled"
+        LocalContentCanAccessRemoteUrls = "LocalContentCanAccessRemoteUrls"
+        WebGLEnabled = "WebGLEnabled"
 
 
 class TrackingBlocker:
