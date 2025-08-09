@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+
 """
 Система іконок та міток для профілів AnDetect Profile Manager
 """
@@ -344,3 +343,4 @@ if __name__ == "__main__":
     print(f"Соціальні мережі: {PROFILE_ICONS['social']}")
     print(f"Покупки: {PROFILE_ICONS['shopping']}")
     print(f"Ігри: {PROFILE_ICONS['gaming']}")
+

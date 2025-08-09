@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -412,3 +413,4 @@ class ProfileManager:
     def get_profile_directory(self, profile_id: str) -> str:
         """Отримання директорії профілю"""
         return os.path.join(self.profiles_dir, profile_id)
+
